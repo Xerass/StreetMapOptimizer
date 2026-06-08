@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Planner</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='main.js') }}" defer></script>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>route-planner</h1>
+            <p>Click the map to drop waypoints. Max 8.</p>
+        </div>
+
+        <div class="controls">
+            <div class="toggle-row">
+                <label>Optimize route (TSP)</label>
+                <div class="switch">
+                    <input type="checkbox" id="optimizeToggle">
+                    <span class="slider"></span>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="routeBtn" disabled>CALCULATE</button>
+                <button class="btn btn-danger" id="clearBtn">CLEAR</button>
+            </div>
+        </div>
+
+        <div class="waypoint-list" id="waypointList">
+            <div class="empty-state">
+                Click anywhere on the map<br>to add waypoints
+            </div>
+        </div>
+
+        <div class="route-stats" id="routeStats">
+            <div class="stat-row">
+                <span class="stat-label">Distance</span>
+                <span class="stat-value" id="statDistance">—</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Duration</span>
+                <span class="stat-value" id="statDuration">—</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Waypoints</span>
+                <span class="stat-value" id="statPoints">—</span>
+            </div>
+        </div>
+
+        <div class="status-bar" id="statusBar">ready</div>
+    </div>
+
+    <div id="map"></div>
+
+</body>
+</html>
