@@ -11,7 +11,25 @@ from math import radians, sin, cos, sqrt, atan2
 #used in route permutations
 from itertools import permutations
 
+
+#mapping of penalties for road quality
+SURFACE_PENALTIES = {
+    "asphalt": 1.0,
+    "concrete": 1.0,
+    "paved": 1.0,
+    "cobblestone": 1.2,
+    "compacted": 1.25,
+    "gravel": 1.4,
+    "dirt": 1.5,
+    "mud": 1.7,
+    "sand": 1.6,
+    "unpaved": 1.45,
+    "ground": 1.5,
+}
+
+
 app = Flask(__name__)
+
 
 
 #so osrm is a routing engine that we cna just use to 
@@ -83,7 +101,132 @@ def get_distance_matrix(waypoints):
 
     return data["distances"], data["durations"]
 
+#open-meteo offers free weeather status along an area
+#we can use this to find the weather at each waypoint (per segment proved to be a lot more API call intensive)
+#unfavorable weather results in a bigger penalty, clear = no penalty
 
+def get_waypoint_weather(waypoints):
+    #get the midpoint of all waypoints as a rough location for wather
+    penalties = []
+    infos = []
+
+    for i, wp in enumerate(waypoints):
+        #this ensures that our calls are at max N
+        try:
+            url = (
+                f"https://api.open-meteo.com/v1/forecast"
+                f"?latitude={wp[1]}&longitude={wp[0]}"
+                f"&current=weather_code,wind_speed_10m,precipitation"
+            )
+            response = requests.get(url, timeout = 5)
+            data = response.json()
+            #current weather, grab it
+            current = data.get("current", {})
+
+            precip = current.get("precipitation", 0)
+            wind = current.get("wind_speed_10m", 0)
+            weather_code = current.get("weather_code", 0)
+
+            #penalties are fully arbitrary, vibes based             
+            
+            penalty = 1.0
+
+            #precipitation penalty
+            if precip > 10:
+                penalty += 0.5    # heavy rain
+            elif precip > 2:
+                penalty += 0.2    # moderate rain
+            elif precip > 0:
+                penalty += 0.1    # drizzle
+
+            #wind penalty
+            if wind > 60:
+                penalty += 0.2
+            elif wind > 30:
+                penalty += 0.1
+
+
+            penalties.append(round(penalty, 2))
+            infos.append({
+                "waypoint": i + 1,
+                "coords": [round(wp[0], 4), round(wp[1], 4)],
+                "precipitation_mm": precip,
+                "wind_kmh": wind,
+                "weather_code": weather_code,
+                "penalty": round(penalty, 2)
+            })
+
+        except Exception:
+            #API must have flunked, just return defaults
+            penalties.append(1.0)
+            infos.append({
+                "waypoint": i + 1,
+                "coords": [round(wp[0], 4), round(wp[1], 4)],
+                "precipitation_mm": 0,
+                "wind_kmh": 0,
+                "weather_code": 0,
+                "penalty": 1.0
+            })
+
+    return penalties, infos
+
+def get_road_quality_factor(waypoints):
+    #define a bounding box from the waypoint to serve as our road quality sampler
+    lons = [wp[0] for wp in waypoints]
+    lats = [wp[1] for wp in waypoints]
+    buffer = 0.01  # roughly 1km padding
+
+    bbox = f"{min(lats)-buffer},{min(lons)-buffer},{max(lats)+buffer},{max(lons)+buffer}"
+
+    #query on overpass
+    query = f"""
+    [out:json][timeout:10];
+    way["highway"]["surface"]({bbox});
+    out tags;
+    """
+
+    try:
+        response = requests.post(
+            "https://overpass-api.de/api/interpreter",
+            data={"data": query},
+            timeout=10
+        )
+
+        data = response.json()
+        elements = data.get("elements", [])
+        
+        #if elements ever returned null, just set it to defaults
+        if not elements:
+            return 1.0, {"surfaces": {}, "factor": 1.0, "road_count": 0}
+
+
+        #we perform a simple count and weighted average
+        surface_counts = {}
+        for elem in elements:
+            surface = elem.get("tags", {}).get("surface", "unknown")
+            surface_counts[surface] = surface_counts.get(surface, 0) + 1
+
+        total_weight = 0
+        total_penalty = 0
+        for surface, count in surface_counts.items():
+            penalty = SURFACE_PENALTIES.get(surface, 1.15) #surfaces not listed we just throw a conservative 15% penalty
+            total_penalty += penalty * count
+            total_weight += count
+
+        factor = round(total_penalty / total_weight, 2) if total_weight > 0 else 1.0
+
+
+        road_info = {
+            "surfaces": surface_counts,
+            "factor": factor,
+            "road_count": total_weight
+        }
+
+        return factor, road_info
+    
+    except Exception:
+
+        return 1.0, {"surfaces": {}, "factor": 1.0, "road_count": 0}
 
 #now that we infroduced multiple routess, we know its going to experience the classic Travelling Salesman Problem
 #in order to solve this, we can use a brute force approach that is waypoint limited
@@ -91,7 +234,7 @@ def get_distance_matrix(waypoints):
 #anything beyond that becomes comoputationally expensive and likely capped by the api call
 
 #to be precise, this returns an ordered list that represent the best order of the waypoints
-def optimize_routes(waypoints):
+def optimize_routes(waypoints, weather_penalties=None, road_factor=1.0):
     n = len(waypoints)
 
     if n <= 2:
@@ -100,10 +243,8 @@ def optimize_routes(waypoints):
 
     distances, durations = get_distance_matrix(waypoints)
 
-    #were gonna brute force all permutations lmao
-
     best_order = None
-    best_distance = float("inf")
+    best_cost = float("inf")
 
     for perm in permutations(range(1, n)):
         order = (0,) + perm #fix the first point, permute the rest
@@ -118,15 +259,22 @@ def optimize_routes(waypoints):
                 #route is invalid, no route exists between these waypoints
                 valid = False
                 break
-            total += d
+
+            #if we have weather data, weight the segment cost
+            #penalty for a segment = average of both endpoint penalties
+            if weather_penalties:
+                seg_weather = (weather_penalties[order[k]] + weather_penalties[order[k + 1]]) / 2
+            else:
+                seg_weather = 1.0
+
+            total += d * seg_weather * road_factor
 
         #if it passes our validity checks, we set it as best_order if its also better than current
-        if valid and total < best_distance:
-            best_distance = total
+        if valid and total < best_cost:
+            best_cost = total
             best_order = list(order)
  
     return best_order
-
 
 def build_graph(coords):
     G = nx.Graph()
@@ -158,67 +306,94 @@ def calculate_route():
     data = request.get_json()
     waypoints = data.get("waypoints", [])
     optimize = data.get("optimize", False)
+    dynamic = data.get("dynamic", False)
 
     if len(waypoints) < 2:
-        #we use jsonify to simplify communcation between back and front ends
         return jsonify({"error": "Need at least 2 waypoints"}), 400
-    
 
     if len(waypoints) > 8:
         return jsonify({"error": "Max 8 waypoints (brute-force TSP)"}), 400
-    
 
-    try: 
+    try:
+        weather_penalties = None
+        weather_infos = None
+        road_factor = 1.0
+        road_info = None
+
+        if dynamic:
+            weather_penalties, weather_infos = get_waypoint_weather(waypoints)
+            road_factor, road_info = get_road_quality_factor(waypoints)
+
         if optimize and len(waypoints) > 2:
-            order = optimize_routes(waypoints)
+            order = optimize_routes(waypoints, weather_penalties, road_factor)
             if order is None:
-                return jsonify({"error": "Max 8 waypoints (brute-force TSP)"}), 400
-           
-            #order the waypoitns
+                return jsonify({"error": "Could not find a valid route between all waypoints"}), 400
+
             optimized_waypoints = [waypoints[i] for i in order]
-           
-            segments = [] #we treat each pair as a segment
+
+            segments = []
             total_distance = 0
             total_duration = 0
+            adjusted_duration = 0
 
             for k in range(len(order) - 1):
-                #now that we have our orderings, we can now use our 2 point get_osrm_route
-
                 dist, dur, coords = get_osrm_route(optimized_waypoints[k], optimized_waypoints[k + 1])
                 segments.append(coords)
                 total_distance += dist
                 total_duration += dur
 
-            
-            return jsonify({
+                if weather_penalties:
+                    seg_weather = (weather_penalties[order[k]] + weather_penalties[order[k + 1]]) / 2
+                else:
+                    seg_weather = 1.0
+                adjusted_duration += dur * seg_weather * road_factor
+
+            result = {
                 "segments": segments,
                 "distance": total_distance,
                 "duration": total_duration,
+                "adjusted_duration": round(adjusted_duration, 1),
                 "order": order,
                 "optimized_waypoints": optimized_waypoints
-            })
-        
-        #if oprimized was false, sequential routing is used (no TSP optim)
+            }
+
         else:
             segments = []
             total_distance = 0
             total_duration = 0
+            adjusted_duration = 0
+
             for i in range(len(waypoints) - 1):
                 dist, dur, coords = get_osrm_route(waypoints[i], waypoints[i + 1])
                 segments.append(coords)
                 total_distance += dist
                 total_duration += dur
- 
-            return jsonify({
+
+                if weather_penalties:
+                    seg_weather = (weather_penalties[i] + weather_penalties[i + 1]) / 2
+                else:
+                    seg_weather = 1.0
+                adjusted_duration += dur * seg_weather * road_factor
+
+            result = {
                 "segments": segments,
                 "distance": total_distance,
                 "duration": total_duration,
+                "adjusted_duration": round(adjusted_duration, 1),
                 "order": list(range(len(waypoints))),
                 "optimized_waypoints": waypoints
-            })
+            }
+
+        if dynamic:
+            result["dynamic"] = {
+                "waypoint_weather": weather_infos,
+                "road_quality": road_info,
+                "road_factor": road_factor
+            }
+
+        return jsonify(result)
 
     except Exception as e:
-        #likely an issue beyond our code
         return jsonify({"error": str(e)}), 500
 
 
