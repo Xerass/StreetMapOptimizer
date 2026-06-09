@@ -5,15 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Route Planner</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="{{ url_for('static', filename='main.js') }}" defer></script>
 </head>
 <body>
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="fa-solid fa-chevron-left"></i>
+        </button>
         <div class="sidebar-header">
             <h1>route-planner</h1>
             <p>Click the map to drop waypoints. Max 8.</p>
+        </div>
+
+        <div class="search-section">
+            <div class="search-box">
+                <input type="text" id="poiSearch" placeholder="Search locations..." autocomplete="off" />
+            </div>
+            <div class="search-results" id="searchResults"></div>
         </div>
 
         <div class="controls">
@@ -21,6 +32,13 @@
                 <label>Optimize route (TSP)</label>
                 <div class="switch">
                     <input type="checkbox" id="optimizeToggle">
+                    <span class="slider"></span>
+                </div>
+            </div>
+            <div class="toggle-row">
+                <label>Dynamic conditions</label>
+                <div class="switch">
+                    <input type="checkbox" id="dynamicToggle">
                     <span class="slider"></span>
                 </div>
             </div>
@@ -48,6 +66,20 @@
             <div class="stat-row">
                 <span class="stat-label">Waypoints</span>
                 <span class="stat-value" id="statPoints">—</span>
+            </div>
+        </div>
+
+        <div class="conditions-panel" id="conditionsPanel">
+            <div class="conditions-header">conditions</div>
+            <div class="conditions-summary" id="condSummary"></div>
+            <div class="conditions-waypoints" id="condWaypoints"></div>
+            <div class="stat-row">
+                <span class="stat-label">Road quality</span>
+                <span class="stat-value" id="condRoad">—</span>
+            </div>
+            <div class="stat-row conditions-adjusted">
+                <span class="stat-label">Adj. duration</span>
+                <span class="stat-value" id="condAdjDuration">—</span>
             </div>
         </div>
 

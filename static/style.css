@@ -38,6 +38,45 @@ body {
     display: flex;
     flex-direction: column;
     z-index: 1000;
+    position: relative;
+    transition: margin-left 0.3s ease, opacity 0.3s ease;
+}
+
+.sidebar.collapsed {
+    margin-left: -360px;
+}
+
+.sidebar-toggle {
+    position: absolute;
+    top: 16px;
+    right: -36px;
+    width: 32px;
+    height: 32px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    color: var(--text-mid);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    z-index: 1001;
+    transition: color 0.15s, background 0.15s;
+}
+
+.sidebar-toggle:hover {
+    color: var(--accent);
+    background: var(--panel-raised);
+}
+
+.sidebar.collapsed .sidebar-toggle i {
+    transform: rotate(180deg);
+}
+
+.sidebar-toggle i {
+    transition: transform 0.3s ease;
 }
 
 .sidebar-header {
@@ -66,6 +105,112 @@ body {
     margin-top: 6px;
     line-height: 1.4;
 }
+
+/* --- Search --- */
+.search-section {
+    padding: 16px 22px 0;
+    position: relative;
+}
+
+.search-box input {
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.search-box input::placeholder { color: var(--text-dim); }
+.search-box input:focus { border-color: var(--accent-muted); }
+
+.search-results {
+    position: absolute;
+    left: 22px;
+    right: 22px;
+    top: 54px;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 2000;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.search-results.visible { display: block; }
+
+.search-results::-webkit-scrollbar { width: 3px; }
+.search-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.search-result-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: var(--border); }
+
+.search-result-icon {
+    font-size: 14px;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.search-result-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.search-result-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-result-type {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* --- POI markers --- */
+.poi-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--panel-raised);
+    border: 1.5px solid var(--border);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+
+.poi-marker i {
+    font-size: 10px;
+    color: var(--text-mid);
+}
+
+.poi-marker:hover { transform: scale(1.3); }
+.poi-marker:hover i { color: var(--accent); }
 
 /* --- Controls --- */
 .controls {
@@ -235,6 +380,28 @@ body {
     box-shadow: 0 0 8px var(--accent-glow);
 }
 
+.waypoint-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.waypoint-name {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.waypoint-coords-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: -0.2px;
+    margin-top: 1px;
+}
+
 .waypoint-coords {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12.5px;
@@ -299,6 +466,93 @@ body {
     color: var(--accent);
     font-weight: 600;
     font-size: 13px;
+}
+
+/* --- Conditions panel --- */
+.conditions-panel {
+    padding: 16px 22px;
+    border-top: 1px solid var(--border);
+    background: var(--panel-raised);
+    display: none;
+    overflow-y: auto;
+    max-height: 280px;
+}
+
+.conditions-panel.visible { display: block; }
+
+.conditions-header {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+}
+
+.conditions-waypoints {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.cond-waypoint {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border-subtle);
+}
+
+.cond-wp-number {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.cond-wp-detail {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.cond-wp-weather {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.cond-wp-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.cond-wp-penalty {
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.cond-wp-penalty.penalty-ok { color: var(--accent); }
+.cond-wp-penalty.penalty-mid { color: var(--warm); }
+.cond-wp-penalty.penalty-high { color: var(--danger); }
+
+.conditions-adjusted {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
 }
 
 /* --- Status bar --- */
@@ -366,6 +620,22 @@ body {
     border: 1px solid var(--border);
     white-space: nowrap;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* POI tooltip */
+.poi-tooltip {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 11px !important;
+    background: var(--panel-raised) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 6px !important;
+    padding: 4px 10px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+.poi-tooltip::before {
+    border-top-color: var(--border) !important;
 }
 
 /* override leaflet controls to match theme */
