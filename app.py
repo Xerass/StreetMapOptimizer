@@ -234,34 +234,34 @@ def get_road_quality_factor(waypoints):
 #anything beyond that becomes comoputationally expensive and likely capped by the api call
 
 #to be precise, this returns an ordered list that represent the best order of the waypoints
-def optimize_routes(waypoints, weather_penalties=None, road_factor=1.0):
+def optimize_routes(waypoints, weather_penalties=None, road_factor=1.0, start_idx=None, end_idx=None):
     n = len(waypoints)
 
     if n <= 2:
-        #bugfix: trailing comma made this return a tuple instead of a list
         return list(range(n))
 
     distances, durations = get_distance_matrix(waypoints)
 
+    # figure out which indices are free to permute, mark them as movable, else not
+    fixed_start = start_idx if start_idx is not None else 0
+    middle = [i for i in range(n) if i != fixed_start and i != end_idx]
+
     best_order = None
     best_cost = float("inf")
 
-    for perm in permutations(range(1, n)):
-        order = (0,) + perm #fix the first point, permute the rest
+    for perm in permutations(middle):
+        order = [fixed_start] + list(perm)
+        if end_idx is not None:
+            order.append(end_idx)
+
         total = 0
         valid = True
         for k in range(len(order) - 1):
-            
-            #get distances between the pair
             d = distances[order[k]][order[k + 1]]
-            #bugfix: missing parens meant 'or' vs 'and' precedence could misfire
             if d is None or (d == 0 and order[k] != order[k + 1]):
-                #route is invalid, no route exists between these waypoints
                 valid = False
                 break
 
-            #if we have weather data, weight the segment cost
-            #penalty for a segment = average of both endpoint penalties
             if weather_penalties:
                 seg_weather = (weather_penalties[order[k]] + weather_penalties[order[k + 1]]) / 2
             else:
@@ -269,11 +269,10 @@ def optimize_routes(waypoints, weather_penalties=None, road_factor=1.0):
 
             total += d * seg_weather * road_factor
 
-        #if it passes our validity checks, we set it as best_order if its also better than current
         if valid and total < best_cost:
             best_cost = total
             best_order = list(order)
- 
+
     return best_order
 
 def build_graph(coords):
@@ -307,6 +306,8 @@ def calculate_route():
     waypoints = data.get("waypoints", [])
     optimize = data.get("optimize", False)
     dynamic = data.get("dynamic", False)
+    start_index = data.get("start_index", None)
+    end_index = data.get("end_index", None)
 
     if len(waypoints) < 2:
         return jsonify({"error": "Need at least 2 waypoints"}), 400
@@ -325,7 +326,8 @@ def calculate_route():
             road_factor, road_info = get_road_quality_factor(waypoints)
 
         if optimize and len(waypoints) > 2:
-            order = optimize_routes(waypoints, weather_penalties, road_factor)
+            order = optimize_routes(waypoints, weather_penalties, road_factor,
+                                   start_idx=start_index, end_idx=end_index)
             if order is None:
                 return jsonify({"error": "Could not find a valid route between all waypoints"}), 400
 
@@ -358,19 +360,33 @@ def calculate_route():
             }
 
         else:
+            # respect explicit start/end even without TSP
+            if start_index is not None or end_index is not None:
+                middle = [i for i in range(len(waypoints)) if i != start_index and i != end_index]
+                order = []
+                if start_index is not None:
+                    order.append(start_index)
+                order.extend(middle)
+                if end_index is not None:
+                    order.append(end_index)
+                ordered_waypoints = [waypoints[i] for i in order]
+            else:
+                order = list(range(len(waypoints)))
+                ordered_waypoints = waypoints
+
             segments = []
             total_distance = 0
             total_duration = 0
             adjusted_duration = 0
 
-            for i in range(len(waypoints) - 1):
-                dist, dur, coords = get_osrm_route(waypoints[i], waypoints[i + 1])
+            for i in range(len(ordered_waypoints) - 1):
+                dist, dur, coords = get_osrm_route(ordered_waypoints[i], ordered_waypoints[i + 1])
                 segments.append(coords)
                 total_distance += dist
                 total_duration += dur
 
                 if weather_penalties:
-                    seg_weather = (weather_penalties[i] + weather_penalties[i + 1]) / 2
+                    seg_weather = (weather_penalties[order[i]] + weather_penalties[order[i + 1]]) / 2
                 else:
                     seg_weather = 1.0
                 adjusted_duration += dur * seg_weather * road_factor
@@ -380,8 +396,8 @@ def calculate_route():
                 "distance": total_distance,
                 "duration": total_duration,
                 "adjusted_duration": round(adjusted_duration, 1),
-                "order": list(range(len(waypoints))),
-                "optimized_waypoints": waypoints
+                "order": order,
+                "optimized_waypoints": ordered_waypoints
             }
 
         if dynamic:
