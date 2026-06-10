@@ -248,6 +248,26 @@ function createMarkerIcon(label) {
 }
 
 let waypointNames = [];
+let startIndex = null;
+let endIndex = null;
+
+function setStart(idx) {
+    if (startIndex === idx) { startIndex = null; }
+    else {
+        startIndex = idx;
+        if (endIndex === idx) endIndex = null;
+    }
+    renderWaypointList();
+}
+
+function setEnd(idx) {
+    if (endIndex === idx) { endIndex = null; }
+    else {
+        endIndex = idx;
+        if (startIndex === idx) startIndex = null;
+    }
+    renderWaypointList();
+}
 
 function addWaypoint(lon, lat, name) {
     const idx = waypoints.length;
@@ -279,6 +299,13 @@ function removeWaypoint(idx) {
     map.removeLayer(markers[idx]);
     markers.splice(idx, 1);
 
+    // adjust start/end indices after removal
+    if (startIndex === idx) startIndex = null;
+    else if (startIndex !== null && startIndex > idx) startIndex--;
+
+    if (endIndex === idx) endIndex = null;
+    else if (endIndex !== null && endIndex > idx) endIndex--;
+
     // rebuild marker labels
     markers.forEach((m, i) => m.setIcon(createMarkerIcon(i + 1)));
 
@@ -301,10 +328,22 @@ function renderWaypointList() {
         const display = waypointNames[i]
             ? `<div class="waypoint-name">${waypointNames[i]}</div><div class="waypoint-coords-sub">${wp[1].toFixed(4)}, ${wp[0].toFixed(4)}</div>`
             : `<div class="waypoint-coords">${wp[1].toFixed(4)}, ${wp[0].toFixed(4)}</div>`;
+
+        const isStart = startIndex === i;
+        const isEnd = endIndex === i;
+
         return `
-            <div class="waypoint-item">
+            <div class="waypoint-item ${isStart ? 'is-start' : ''} ${isEnd ? 'is-end' : ''}">
                 <div class="waypoint-number">${i + 1}</div>
                 <div class="waypoint-info">${display}</div>
+                <div class="waypoint-role-btns">
+                    <button class="role-btn ${isStart ? 'active-start' : ''}" onclick="setStart(${i})" title="Set as start">
+                        <i class="fa-solid fa-flag"></i>
+                    </button>
+                    <button class="role-btn ${isEnd ? 'active-end' : ''}" onclick="setEnd(${i})" title="Set as end">
+                        <i class="fa-solid fa-location-crosshairs"></i>
+                    </button>
+                </div>
                 <button class="waypoint-remove" onclick="removeWaypoint(${i})">×</button>
             </div>`;
     }).join('');
@@ -325,7 +364,9 @@ routeBtn.addEventListener('click', async () => {
             body: JSON.stringify({
                 waypoints: waypoints,
                 optimize: optimizeToggle.checked,
-                dynamic: dynamicToggle.checked
+                dynamic: dynamicToggle.checked,
+                start_index: startIndex,
+                end_index: endIndex
             })
         });
 
@@ -341,7 +382,15 @@ routeBtn.addEventListener('click', async () => {
 
         // update marker order if optimized
         if (optimizeToggle.checked && data.optimized_waypoints) {
+            // reorder names to match optimized order
+            const newNames = data.order.map(i => waypointNames[i]);
+            waypointNames = newNames;
             waypoints = data.optimized_waypoints;
+
+            // remap start/end to new positions
+            if (startIndex !== null) startIndex = data.order.indexOf(startIndex);
+            if (endIndex !== null) endIndex = data.order.indexOf(endIndex);
+
             // rebuild markers in new order
             markers.forEach(m => map.removeLayer(m));
             markers = [];
@@ -465,6 +514,8 @@ function clearRoute() {
 clearBtn.addEventListener('click', () => {
     waypoints = [];
     waypointNames = [];
+    startIndex = null;
+    endIndex = null;
     markers.forEach(m => map.removeLayer(m));
     markers = [];
     clearRoute();

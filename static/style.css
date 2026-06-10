@@ -410,6 +410,55 @@ body {
     letter-spacing: -0.2px;
 }
 
+/* --- Start/End role buttons --- */
+.waypoint-role-btns {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.role-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 10px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.15s;
+}
+
+.role-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+}
+
+.role-btn.active-start {
+    color: var(--accent);
+    border-color: var(--accent-muted);
+    background: var(--accent-glow);
+}
+
+.role-btn.active-end {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: var(--danger-muted);
+}
+
+.waypoint-item.is-start .waypoint-number {
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow-strong);
+}
+
+.waypoint-item.is-end .waypoint-number {
+    background: var(--danger);
+    box-shadow: 0 0 12px rgba(217, 78, 78, 0.25);
+}
+
 .waypoint-remove {
     background: none;
     border: none;
