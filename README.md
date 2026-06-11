@@ -2,6 +2,10 @@
 
 A web-based route planner that calculates multi-waypoint driving routes using OSRM. Supports brute-force TSP optimization for up to 8 waypoints and optional dynamic conditions that factor in real-time weather and road surface quality.
 
+## Demo
+
+[![Watch the demo](https://img.youtube.com/vi/hWsyaENlLjM/maxresdefault.jpg)](https://youtu.be/hWsyaENlLjM)
+
 ## What it does
 
 - Drop up to 8 waypoints on a dark-themed Leaflet map
